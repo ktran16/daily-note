@@ -3,8 +3,9 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-OUTPUT="$ROOT_DIR/daily-notes.epub"
-TITLE="Daily Notes"
+DEFAULT_NAME="daily-notes"
+OUTPUT=""
+TITLE=""
 AUTHOR=""
 
 usage() {
@@ -14,15 +15,28 @@ Usage: ./build-epub.sh [options] [markdown-file ...]
 Build an EPUB from Markdown files. With no file arguments, all Markdown files
 below the script directory are included in filename order, except README.md.
 
+Output path and title default to the name of the first Markdown file given
+(e.g. dbt-agenda-book.md -> dbt-agenda-book.epub, titled "Dbt Agenda Book").
+With no file arguments they fall back to daily-notes.epub / "Daily Notes".
+
 Options:
-  -o, --output FILE   Output EPUB path (default: daily-notes.epub)
-  -t, --title TITLE   Ebook title (default: Daily Notes)
+  -o, --output FILE   Output EPUB path (default: <first input file>.epub)
+  -t, --title TITLE   Ebook title (default: name of the first input file)
   -a, --author NAME   Ebook author
   -h, --help          Show this help
 
 The script uses a locally installed pandoc when available. Otherwise, it uses
 Docker and the image specified by PANDOC_IMAGE (default: pandoc/core:latest).
 EOF
+}
+
+# "dbt-agenda-book" -> "Dbt Agenda Book"
+title_from_name() {
+  local words=${1//[-_]/ } word out=""
+  for word in $words; do
+    out+="${out:+ }${word^}"
+  done
+  printf '%s' "$out"
 }
 
 declare -a requested_files=()
@@ -81,6 +95,15 @@ else
 fi
 
 ((${#files[@]})) || { echo "No Markdown files found." >&2; exit 1; }
+
+if ((${#requested_files[@]})); then
+  BASE_NAME=$(basename -- "${requested_files[0]}")
+  BASE_NAME=${BASE_NAME%.*}
+else
+  BASE_NAME=$DEFAULT_NAME
+fi
+[[ -n $OUTPUT ]] || OUTPUT="$ROOT_DIR/$BASE_NAME.epub"
+[[ -n $TITLE ]] || TITLE=$(title_from_name "$BASE_NAME")
 
 [[ $OUTPUT = /* ]] || OUTPUT="$PWD/$OUTPUT"
 mkdir -p -- "$(dirname -- "$OUTPUT")"
